@@ -7,8 +7,15 @@
    Publica en window.RW: BRAND, SUPABASE_URL, SUPABASE_KEY, TEAM_EMAIL
    ============================================================ */
 (function () {
-  /* ---------- Paleta Redwood ---------- */
-  const BRAND = { deep: "#6B2E20", mid: "#8C3B28", soft: "#F6EFEA" };
+  /* ---------- Paleta de marca (witbor) ---------- */
+  const BRAND = {
+    deep: "#6D28D9",  // violeta oscuro — texto/acentos sobre blanco
+    mid:  "#7C3AED",  // violeta — botones, filas de grupo, puntos
+    soft: "#F5F4FC",  // fondo claro
+    // Degradado de marca (azul → índigo → violeta → magenta),
+    // para el encabezado y la pantalla de acceso.
+    gradient: "linear-gradient(120deg, #1C7FC0 0%, #4257D8 28%, #6D28D9 58%, #B02E86 100%)",
+  };
 
   /* ---------- Conexión a Supabase ----------
      Para cambiar de proyecto: reemplaza estos tres valores.

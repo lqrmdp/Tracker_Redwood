@@ -4,10 +4,10 @@
    ============================================================ */
 
 :root {
-  /* ---- Paleta Redwood (marca) ---- */
-  --color-brand-deep: #6B2E20; /* rojo Redwood oscuro */
-  --color-brand-mid:  #8C3B28; /* rojo Redwood medio  */
-  --color-bg:         #F6EFEA; /* fondo crema         */
+  /* ---- Paleta de marca (witbor) ---- */
+  --color-brand-deep: #6D28D9; /* violeta oscuro */
+  --color-brand-mid:  #7C3AED; /* violeta        */
+  --color-bg:         #F5F4FC; /* fondo claro    */
 
   /* ---- Sombras del banner "MODO TEST" (morado) ---- */
   --shadow-test:        rgba(147, 51, 234, 0.35);

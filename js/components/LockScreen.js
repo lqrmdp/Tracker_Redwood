@@ -45,11 +45,10 @@
 
     return (
       <div className="min-h-screen flex items-center justify-center p-4"
-        style={{ background: `linear-gradient(150deg, ${BRAND.deep}, ${BRAND.mid})` }}>
+        style={{ background: BRAND.gradient }}>
         <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-7 text-center">
-          <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center" style={{ background: BRAND.soft }}>
-            <Icon path={I.Lock} className="w-5 h-5" style={{ color: BRAND.mid }} />
-          </div>
+          <img src="img/logo.png" alt="witbor" className="mx-auto h-10 w-auto"
+            onError={(e) => { e.currentTarget.style.display = "none"; }} />
           <p className="mt-4 text-xs uppercase tracking-widest text-gray-400">Oracle Fusion Cloud</p>
           <h1 className="text-xl font-bold text-gray-800" style={{ fontFamily: "Georgia, serif" }}>
             Tracker de Migración Redwood

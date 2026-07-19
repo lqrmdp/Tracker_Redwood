@@ -14,7 +14,7 @@
     BRAND, MODULES, ESTADOS, ESTADO_ORDER, SUBS, SUB_ORDER,
     keyOf, buildSeedDoc, fmtDateTime, fmtDate, csvEscape,
     Icon, I, LockScreen, FilterSelect, DetailModal,
-    getSession, loadDefinitions, loadCells, upsertCell, deleteAllCells, subscribeCells,
+    getSession, loadDefinitions, loadCells, upsertCell, subscribeCells,
   } = window.RW;
   // CLIENTS, PMS y SEED no se destructuran aquí: solo existen tras el login.
   // Se leen de window.RW dentro de TrackerApp (los pone la puerta de acceso).
@@ -74,7 +74,6 @@
     const [tab, setTab] = useState("matriz");
     const [currentPM, setCurrentPM] = useState("");
     const [selected, setSelected] = useState(null);
-    const [confirmReset, setConfirmReset] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [testMode, setTestMode] = useState(false);
     const testModeRef = useRef(false); // evita que el "tiempo real" pise el modo prueba
@@ -132,19 +131,6 @@
       } catch (e) {
         setSaveError("No se pudo guardar en la base. Revisa tu conexión e inténtalo otra vez.");
       }
-    }
-
-    async function resetData() {
-      setConfirmReset(false);
-      if (testMode) { setDoc(buildSeedDoc()); return; }
-      setSyncing(true);
-      try {
-        await deleteAllCells();   // borra el seguimiento de TODO el equipo
-        await loadDoc(true);
-      } catch (e) {
-        setSaveError("No se pudo restablecer.");
-      }
-      setSyncing(false);
     }
 
     /* ---------- Derivados ---------- */
@@ -226,14 +212,19 @@
       <div className="min-h-screen" style={{ background: BRAND.soft }}>
 
         {/* Encabezado */}
-        <header className="text-white" style={{ background: `linear-gradient(120deg, ${BRAND.deep}, ${BRAND.mid})` }}>
+        <header className="text-white" style={{ background: BRAND.gradient }}>
           <div className="max-w-7xl mx-auto px-4 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-widest opacity-80">Oracle Fusion Cloud</p>
-                <h1 className="text-2xl font-bold leading-tight" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
-                  Tracker de Migración Redwood
-                </h1>
+              <div className="flex items-center gap-3">
+                <img src="img/logo.png" alt="witbor"
+                  className="h-9 w-auto bg-white rounded-lg px-2.5 py-1.5 shadow-sm shrink-0"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                <div>
+                  <p className="text-xs uppercase tracking-widest opacity-80">Oracle Fusion Cloud</p>
+                  <h1 className="text-2xl font-bold leading-tight" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+                    Tracker de Migración Redwood
+                  </h1>
+                </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-2 bg-white/15 rounded-lg px-3 py-2">
@@ -591,19 +582,8 @@
           )}
         </main>
 
-        <footer className="max-w-7xl mx-auto px-4 pb-6 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+        <footer className="max-w-7xl mx-auto px-4 pb-6 text-xs text-gray-400">
           <span>Datos compartidos en vivo con el equipo. Comparte el enlace y la contraseña solo con el equipo.</span>
-          {confirmReset ? (
-            <span className="flex items-center gap-2 text-rose-600">
-              ¿Restablecer para TODO el equipo a los datos originales? Se perderá el seguimiento capturado por todos.
-              <button onClick={resetData} className="font-semibold underline">Sí, restablecer</button>
-              <button onClick={() => setConfirmReset(false)} className="underline">Cancelar</button>
-            </span>
-          ) : (
-            <button onClick={() => setConfirmReset(true)} className="flex items-center gap-1 hover:text-gray-600">
-              <Icon path={I.Undo} className="w-3 h-3" /> Restablecer datos
-            </button>
-          )}
         </footer>
 
         {selected && (
