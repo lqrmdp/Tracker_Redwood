@@ -9,30 +9,58 @@
    DetailModal
    ============================================================ */
 (function () {
-  const { useState, useEffect, useMemo, useCallback } = React;
+  const { useState, useEffect, useMemo, useCallback, useRef } = React;
   const {
     BRAND, MODULES, ESTADOS, ESTADO_ORDER, SUBS, SUB_ORDER,
-    keyOf, buildSeedDoc, fmtDateTime, fmtDate, csvEscape, storage,
+    keyOf, buildSeedDoc, fmtDateTime, fmtDate, csvEscape,
     Icon, I, LockScreen, FilterSelect, DetailModal,
+    getSession, loadDefinitions, loadCells, upsertCell, deleteAllCells, subscribeCells,
   } = window.RW;
-  // CLIENTS, PMS y SEED no se destructuran aquí: solo existen tras el
-  // login (descifrado). Se leen de window.RW dentro de TrackerApp.
+  // CLIENTS, PMS y SEED no se destructuran aquí: solo existen tras el login.
+  // Se leen de window.RW dentro de TrackerApp (los pone la puerta de acceso).
 
-  /* ---------- Puerta de acceso: descifra los datos y monta la app ----------
-     Mientras no hay datos descifrados solo se muestra LockScreen. Al acertar
-     la contraseña, LockScreen entrega { CLIENTS, SEED }; los publicamos en
-     window.RW (con PMS derivado) y montamos TrackerApp, que a partir de ahí
-     siempre tiene los datos disponibles. */
+  /* Pantalla de carga reutilizable */
+  function Splash({ label }) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: BRAND.soft }}>
+        <div className="text-center">
+          <Icon path={I.Reload} className="w-8 h-8 mx-auto animate-spin" style={{ color: BRAND.mid }} />
+          <p className="mt-3 text-sm text-gray-600">{label}</p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- Puerta de acceso: login + carga de definiciones ----------
+     Si ya hay sesión iniciada (login recordado), entra directo. Si no,
+     muestra LockScreen. Tras iniciar sesión, carga las definiciones
+     (clientes/PMs + matriz inicial) desde la base, las publica en window.RW
+     y monta TrackerApp, que a partir de ahí siempre tiene los datos. */
   function TrackerRedwood() {
-    const [data, setData] = useState(null);
-    if (!data) {
-      return <LockScreen onUnlock={(d) => {
-        window.RW.CLIENTS = d.CLIENTS;
-        window.RW.SEED = d.SEED;
-        window.RW.PMS = [...new Set(d.CLIENTS.map((x) => x.pm))].sort();
-        setData(d);
-      }} />;
-    }
+    const [phase, setPhase] = useState("checking"); // checking | locked | loading | ready
+
+    const enter = useCallback(async () => {
+      setPhase("loading");
+      try {
+        const def = await loadDefinitions();
+        window.RW.CLIENTS = def.CLIENTS;
+        window.RW.SEED = def.SEED;
+        window.RW.PMS = [...new Set(def.CLIENTS.map((x) => x.pm))].sort();
+        setPhase("ready");
+      } catch (e) {
+        setPhase("locked");
+      }
+    }, []);
+
+    useEffect(() => {
+      getSession()
+        .then((s) => { if (s) enter(); else setPhase("locked"); })
+        .catch(() => setPhase("locked"));
+    }, [enter]);
+
+    if (phase === "checking") return <Splash label="Conectando…" />;
+    if (phase === "loading") return <Splash label="Cargando datos del equipo…" />;
+    if (phase === "locked") return <LockScreen onUnlock={enter} />;
     return <TrackerApp />;
   }
 
@@ -49,6 +77,7 @@
     const [confirmReset, setConfirmReset] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [testMode, setTestMode] = useState(false);
+    const testModeRef = useRef(false); // evita que el "tiempo real" pise el modo prueba
 
     // Filtros
     const [fPM, setFPM] = useState("");
@@ -58,52 +87,64 @@
     const [pPM, setPPM] = useState("");
     const [pSub, setPSub] = useState("");
 
-    /* ---------- Carga inicial ---------- */
-    const loadDoc = useCallback((silent) => {
+    /* ---------- Carga desde la base ---------- */
+    const loadDoc = useCallback(async (silent) => {
       if (!silent) setLoading(true); else setSyncing(true);
-      const stored = storage.load();
-      if (stored) setDoc(stored);
-      else {
-        const seed = buildSeedDoc();
-        storage.save(seed);
-        setDoc(seed);
+      try {
+        const cellsMap = await loadCells();              // ediciones del equipo
+        const base = buildSeedDoc().cells;               // matriz inicial
+        setDoc({ cells: { ...base, ...cellsMap } });     // ediciones encima de la base
+      } catch (e) {
+        setSaveError("No se pudieron cargar los datos. Revisa tu conexión.");
       }
       setLoading(false); setSyncing(false);
     }, []);
 
-    useEffect(() => { loadDoc(false); }, [loadDoc]);
+    // Carga inicial + "tiempo real": si alguien del equipo cambia algo, recargamos.
+    useEffect(() => {
+      loadDoc(false);
+      const unsub = subscribeCells(() => { if (!testModeRef.current) loadDoc(true); });
+      return unsub;
+    }, [loadDoc]);
 
-    /* ---------- Modo prueba ---------- */
+    /* ---------- Modo prueba (local, no toca la base) ---------- */
     function enterTestMode() {
+      testModeRef.current = true;
       setTestMode(true); setSaveError(""); setSelected(null); setDoc(buildSeedDoc());
     }
     function exitTestMode() {
+      testModeRef.current = false;
       setTestMode(false); setSaveError(""); setSelected(null); loadDoc(true);
     }
 
     /* ---------- Guardado ---------- */
-    function saveCell(cellKey, cell) {
+    async function saveCell(cellKey, cell) {
       setSaveError("");
-      if (testMode) {
-        setDoc((prev) => {
-          const base = prev || buildSeedDoc();
-          return { ...base, cells: { ...base.cells, [cellKey]: cell } };
-        });
-        return;
-      }
-      const base = storage.load() || doc || buildSeedDoc();
-      const next = { ...base, cells: { ...base.cells, [cellKey]: cell } };
-      setDoc(next);
-      if (!storage.save(next)) {
-        setSaveError("No se pudo guardar en este navegador. El cambio quedó solo en esta sesión.");
+      // 1) Actualización inmediata en pantalla (optimista)
+      setDoc((prev) => {
+        const base = prev || buildSeedDoc();
+        return { ...base, cells: { ...base.cells, [cellKey]: cell } };
+      });
+      if (testMode) return; // en modo prueba no se toca la base compartida
+      // 2) Guardar en la base (los demás lo verán en vivo)
+      try {
+        await upsertCell(cellKey, cell);
+      } catch (e) {
+        setSaveError("No se pudo guardar en la base. Revisa tu conexión e inténtalo otra vez.");
       }
     }
 
-    function resetData() {
-      const seed = buildSeedDoc();
-      setDoc(seed); setConfirmReset(false);
-      if (testMode) return;
-      if (!storage.save(seed)) setSaveError("No se pudo restablecer.");
+    async function resetData() {
+      setConfirmReset(false);
+      if (testMode) { setDoc(buildSeedDoc()); return; }
+      setSyncing(true);
+      try {
+        await deleteAllCells();   // borra el seguimiento de TODO el equipo
+        await loadDoc(true);
+      } catch (e) {
+        setSaveError("No se pudo restablecer.");
+      }
+      setSyncing(false);
     }
 
     /* ---------- Derivados ---------- */
@@ -551,10 +592,10 @@
         </main>
 
         <footer className="max-w-7xl mx-auto px-4 pb-6 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
-          <span>Datos guardados en este navegador. Comparte el enlace solo con el equipo.</span>
+          <span>Datos compartidos en vivo con el equipo. Comparte el enlace y la contraseña solo con el equipo.</span>
           {confirmReset ? (
             <span className="flex items-center gap-2 text-rose-600">
-              ¿Restablecer todo a los datos originales del Excel? Se perderá el seguimiento capturado.
+              ¿Restablecer para TODO el equipo a los datos originales? Se perderá el seguimiento capturado por todos.
               <button onClick={resetData} className="font-semibold underline">Sí, restablecer</button>
               <button onClick={() => setConfirmReset(false)} className="underline">Cancelar</button>
             </span>
@@ -572,7 +613,7 @@
             currentPM={currentPM}
             setCurrentPM={setCurrentPM}
             onClose={() => setSelected(null)}
-            onSave={(cell) => { saveCell(keyOf(selected.cliente, selected.modulo), cell); setSelected(null); }}
+            onSave={async (cell) => { await saveCell(keyOf(selected.cliente, selected.modulo), cell); setSelected(null); }}
           />
         )}
       </div>

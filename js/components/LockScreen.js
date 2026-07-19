@@ -1,14 +1,14 @@
 /* ============================================================
    LockScreen.js — pantalla de acceso (contraseña de equipo)
-   La contraseña se valida DESCIFRANDO los datos: si el descifrado
-   tiene éxito, la contraseña es correcta y se entregan los datos
-   (CLIENTS, SEED) a la app vía onUnlock.
-   Depende de: React (hooks), Icon, I, BRAND, decryptData
+   La contraseña se valida INICIANDO SESIÓN en la base de datos
+   (Supabase). Si el login tiene éxito, se avisa con onUnlock() y la
+   app carga los datos compartidos.
+   Depende de: React (hooks), Icon, I, BRAND, signIn
    Publica en window.RW: LockScreen
    ============================================================ */
 (function () {
   const { useState, useEffect } = React;
-  const { Icon, I, BRAND, decryptData } = window.RW;
+  const { Icon, I, BRAND, signIn } = window.RW;
 
   function LockScreen({ onUnlock }) {
     const [pwd, setPwd] = useState("");
@@ -26,18 +26,19 @@
     async function tryUnlock() {
       if (checking || cooldown > 0) return;
       if (!pwd) { setError("Escribe la contraseña de acceso."); return; }
-      if (!window.crypto || !window.crypto.subtle) {
-        setError("Este navegador no permite descifrar aquí. Ábrelo en un host web (https) o con un servidor local.");
-        return;
-      }
       setChecking(true); setError("");
       try {
-        const data = await decryptData(pwd);
-        onUnlock(data); return;
+        await signIn(pwd);
+        onUnlock(); return;
       } catch (e) {
-        const n = attempts + 1;
-        setAttempts(n); setPwd(""); setError("Contraseña incorrecta.");
-        if (n % 5 === 0) setCooldown(30);
+        const msg = (e && e.message) || "";
+        if (/invalid login|credentials|password/i.test(msg)) {
+          const n = attempts + 1;
+          setAttempts(n); setPwd(""); setError("Contraseña incorrecta.");
+          if (n % 5 === 0) setCooldown(30);
+        } else {
+          setError("No se pudo conectar con el servidor. Revisa tu internet e inténtalo de nuevo.");
+        }
       }
       setChecking(false);
     }
