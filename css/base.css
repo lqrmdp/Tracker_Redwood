@@ -1,0 +1,37 @@
+/* ============================================================
+   base.css — reset, variables globales y tipografía base
+   Se carga PRIMERO. El resto de CSS depende de estas variables.
+   ============================================================ */
+
+:root {
+  /* ---- Paleta Redwood (marca) ---- */
+  --color-brand-deep: #6B2E20; /* rojo Redwood oscuro */
+  --color-brand-mid:  #8C3B28; /* rojo Redwood medio  */
+  --color-bg:         #F6EFEA; /* fondo crema         */
+
+  /* ---- Sombras del banner "MODO TEST" (morado) ---- */
+  --shadow-test:        rgba(147, 51, 234, 0.35);
+  --shadow-test-strong: rgba(147, 51, 234, 0.65);
+
+  /* ---- Radios ---- */
+  --radius-sm: 4px;
+  --radius-md: 12px;
+
+  /* ---- Tipografía ---- */
+  --font-sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+}
+
+/* ---- Reset mínimo / base del documento ---- */
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+}
+
+select, input, textarea, button { font-family: inherit; }
+
+/* Utilidad para bordes discontinuos usados en celdas "Sin capturar" */
+.border-dashed-cell { border-style: dashed !important; }
